@@ -1,10 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.model_selection import train_test_split
 import math
 import matplotlib.pyplot as plt
 import seaborn as sb
@@ -261,6 +268,120 @@ if menu == "Analiza Datelor despre AVC":
     # Afisare date dupa scalare
     st.write("* Date după scalare")
     st.dataframe(df)
+
+    # K-MEANS
+    st.subheader("K-Means Clustering")
+
+    # Alegerea numarului de clustere
+    num_clusters = st.slider("Selectează numărul de clustere (K)", min_value=2, max_value=10, value=3)
+
+    # Aplicarea KMeans
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    df['cluster'] = kmeans.fit_predict(df[numerical_cols])
+
+    st.write("Etichetele clusterelor au fost adăugate în DataFrame:")
+    st.dataframe(df[['age', 'avg_glucose_level', 'bmi', 'cluster']])
+
+    # Vizualizare cu PCA
+    st.write("Proiecția cu PCA pentru vizualizarea clusterelor: ")
+    pca = PCA(n_components=2)
+    cluster_data = pca.fit_transform(df[numerical_cols])
+    cluster_df = pd.DataFrame(cluster_data, columns=['PC1', 'PC2'])
+    cluster_df['cluster'] = df['cluster']
+
+    plt.figure(figsize=(8, 5))
+    sb.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='cluster', palette='Set1')
+    plt.title(f"Vizualizarea Clusterelor (K={num_clusters}) cu PCA")
+    plt.xlabel("PC1")
+    plt.ylabel("PC2")
+    plt.tight_layout()
+    st.pyplot(plt)
+
+    # Afisare medii pe clustere
+    st.write("**Medii ale variabilelor numerice în fiecare cluster:**")
+    cluster_summary = df.groupby('cluster')[numerical_cols].mean()
+    st.dataframe(cluster_summary)
+
+    # REGRESIA LINIARA
+    st.subheader('Regresie Liniară')
+
+    # Permite utilizatorului sa aleaga variabila dependenta dintre coloanele numerice
+    dependent_var = st.selectbox("Selectează variabila dependentă", numerical_cols)
+
+    # Permite utilizatorului sa aleaga variabilele independente dintre coloanele numerice
+    independent_vars = st.multiselect("Selectează variabilele independente", numerical_cols)
+
+    # Verifica daca utilizatorul a ales cel putin o variabila independenta
+    if independent_vars:
+        # Creaza un subset din datele pentru regresie
+        X = df[independent_vars]
+        y = df[dependent_var]
+
+        # Impartirea setului de date in training si testare (80% training, 20% test)
+        from sklearn.model_selection import train_test_split
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Crearea si antrenarea modelului de regresie liniara
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+
+        # Prezicerea valorilor pe setul de test
+        y_pred = model.predict(X_test)
+
+        # Calcularea erorii si a coeficientilor
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+
+        st.write(f"Coeficientii regresiei: {model.coef_}")
+        st.write(f"Interceptul: {model.intercept_}")
+        st.write(f"Erorile medii pătratice (MSE): {mse}")
+        st.write(f"Scorul R^2: {r2}")
+
+        # Graficul de comparare intre valorile reale si cele prezise
+        plt.figure(figsize=(8, 4))
+        plt.scatter(y_test, y_pred, color='blue')
+        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='red', linestyle='--')
+        plt.title("Comparare valori reale vs prezise")
+        plt.xlabel("Valori reale")
+        plt.ylabel("Valori prezise")
+        plt.tight_layout()
+        st.pyplot(plt)
+
+    # REGRESIE LOGISTICA + ROC
+    st.subheader("Regresie Logistică - Predicția AVC (Stroke)")
+
+    # Selectam caracteristicile (X) si tinta (y)
+    feature_cols = numerical_cols + categorical_columns
+    X = df[feature_cols]
+    y = df['stroke']
+
+    # Impartirea datelor in train si test
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Antrenarea modelului
+    log_model = LogisticRegression(max_iter=1000)
+    log_model.fit(X_train, y_train)
+
+    # Prezicerea probabilitatilor pentru clasa pozitiva
+    y_prob = log_model.predict_proba(X_test)[:, 1]
+
+    # Calcularea ROC și AUC
+    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+    auc_score = roc_auc_score(y_test, y_prob)
+
+    # Afisarea scorului AUC
+    st.write(f"Scorul AUC: {auc_score:.4f}")
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(fpr, tpr, label=f'AUC = {auc_score:.2f}', color='blue')
+    plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
+    plt.xlabel('Rata fals pozitivă (FPR)')
+    plt.ylabel('Rata adevărat pozitivă (TPR)')
+    plt.title('Curba ROC - Regresie Logistică')
+    plt.legend(loc='lower right')
+    plt.tight_layout()
+    st.pyplot(plt)
 
 elif menu == "Geopandas - Slovacia":
     st.title("Analiza datelor geospațiale cu GeoPandas - Slovacia")
