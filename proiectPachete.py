@@ -256,7 +256,6 @@ if menu == "Analiza Datelor despre AVC":
     # Scalarea variabilelor numerice
     st.subheader("Scalarea")
     scalar_choice = st.selectbox("Alege metoda de scalare", ('StandardScaler', 'MinMaxScaler'))
-
     if scalar_choice == 'StandardScaler':
         scaler = StandardScaler()
     elif scalar_choice == 'MinMaxScaler':
